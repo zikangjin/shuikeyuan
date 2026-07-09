@@ -442,6 +442,70 @@ def _line_substring(line: LineString, start_m: float, end_m: float):
     return _select_line_part(parts, None)
 
 
+def _measure_ranges_on_line(line: LineString, obstacle_geom) -> list[tuple[float, float]]:
+    if obstacle_geom is None or obstacle_geom.is_empty or line is None or line.is_empty:
+        return []
+    try:
+        intersection = line.intersection(obstacle_geom)
+    except Exception:
+        return []
+    ranges: list[tuple[float, float]] = []
+    for part in _line_parts(intersection):
+        coords = list(part.coords)
+        if not coords:
+            continue
+        start = float(line.project(Point(coords[0])))
+        end = float(line.project(Point(coords[-1])))
+        if abs(end - start) > 1e-6:
+            ranges.append((min(start, end), max(start, end)))
+    for point in _point_parts(intersection):
+        measure = float(line.project(point))
+        ranges.append((measure, measure))
+    return sorted(ranges)
+
+
+def _trim_line_before_buildings(
+    line: LineString,
+    building_geom,
+    river_m: float | None,
+    clearance_m: float,
+):
+    """Trim a section segment so it keeps the river point but stops before buildings."""
+
+    if line is None or line.is_empty or river_m is None or building_geom is None or building_geom.is_empty:
+        return line, 0.0, float(line.length) if line is not None and not line.is_empty else 0.0, False, ""
+    river_m = max(0.0, min(float(river_m), line.length))
+    clearance_m = max(0.0, float(clearance_m))
+    ranges = _measure_ranges_on_line(line, building_geom)
+    if not ranges:
+        return line, 0.0, float(line.length), False, ""
+
+    eps = 1e-6
+    if any(start < river_m - eps and end > river_m + eps for start, end in ranges):
+        return line, 0.0, float(line.length), False, "河中落在建筑范围内，未避让"
+
+    start_m = 0.0
+    end_m = float(line.length)
+    before = [end for start, end in ranges if end <= river_m - eps]
+    after = [start for start, end in ranges if start >= river_m + eps]
+    if before:
+        start_m = max(before) + clearance_m
+    if after:
+        end_m = min(after) - clearance_m
+
+    if start_m >= river_m - eps:
+        start_m = 0.0
+    if end_m <= river_m + eps:
+        end_m = float(line.length)
+    if start_m <= eps and end_m >= line.length - eps:
+        return line, 0.0, float(line.length), False, ""
+
+    trimmed = _line_substring(line, start_m, end_m)
+    if trimmed is None or trimmed.is_empty:
+        return line, 0.0, float(line.length), False, "避让建筑后断面为空，未避让"
+    return trimmed, start_m, end_m, True, f"避让建筑(clearance={clearance_m:g}m)"
+
+
 def _table_river_center_point(table_range: dict | None, source_crs, target_crs):
     if not table_range:
         return None
@@ -580,6 +644,7 @@ def _trim_sections_for_context(
     roads_gdf: gpd.GeoDataFrame | None,
     table_trim_ranges: dict[str, dict] | None,
     logger,
+    avoid_buildings_gdf: gpd.GeoDataFrame | None = None,
 ) -> gpd.GeoDataFrame:
     mode = str(config.get("section_trim_mode") or "road_river").strip().lower()
     if mode in {"", "none", "full", "完整断面", "不裁剪"}:
@@ -594,6 +659,14 @@ def _trim_sections_for_context(
     buffer_m = float(config.get("section_trim_buffer_m") or 150)
     sections_projected = sections.to_crs(analysis_crs).copy()
     reference_geom = _union_geometry(reference_gdf.to_crs(analysis_crs))
+    avoid_buildings_enabled = _as_bool(config.get("section_avoid_buildings"), True)
+    building_clearance_m = float(config.get("section_building_clearance_m") or 2)
+    building_avoid_source = avoid_buildings_gdf if avoid_buildings_gdf is not None else reference_gdf
+    building_geom = (
+        _union_geometry(building_avoid_source.to_crs(analysis_crs))
+        if avoid_buildings_enabled and building_avoid_source is not None and not building_avoid_source.empty
+        else None
+    )
     village_geom = _union_geometry(village_boundary_gdf.to_crs(analysis_crs)) if village_boundary_gdf is not None else None
     river_geom = _union_geometry(rivers_gdf.to_crs(analysis_crs)) if rivers_gdf is not None else None
     road_geom = _union_geometry(roads_gdf.to_crs(analysis_crs)) if roads_gdf is not None else None
@@ -693,6 +766,35 @@ def _trim_sections_for_context(
                 candidate_method = fallback_name
             if candidate is None:
                 continue
+
+            candidate_len_before_avoid = float(candidate.length)
+            river_m_on_candidate = None
+            if table_range is not None and row_start is not None and row_river_center is not None:
+                river_m_on_candidate = float(row_river_center) - float(table_range["start_m"])
+                if table_center_point is not None and not table_center_point.is_empty and table_center_point.distance(candidate) <= table_anchor_tolerance_m:
+                    river_m_on_candidate = float(candidate.project(table_center_point))
+            elif river_geom is not None and not river_geom.is_empty:
+                river_m_on_candidate = _river_measure_on_line(candidate, river_geom, reference_geom)
+
+            candidate, avoid_start, avoid_end, avoided_buildings, avoid_note = _trim_line_before_buildings(
+                candidate,
+                building_geom,
+                river_m_on_candidate,
+                building_clearance_m,
+            )
+            if avoided_buildings:
+                candidate_method = f"{candidate_method or method}-{avoid_note}"
+                if table_range is not None and row_start is not None:
+                    table_start = float(table_range["start_m"])
+                    row_start = table_start + avoid_start
+                    row_end = table_start + avoid_end
+                    if avoid_start > 1e-6:
+                        row_start_label = "建筑前缘"
+                    if avoid_end < candidate_len_before_avoid - 1e-6:
+                        row_end_label = "建筑前缘"
+            elif avoid_note:
+                candidate_method = f"{candidate_method or method}-{avoid_note}"
+
             if best_part is None:
                 best_part = candidate
                 method = candidate_method or method
@@ -1003,6 +1105,7 @@ def run_analysis(config: dict, logger) -> AnalysisResult:
         roads_source,
         load_section_table_trim_ranges(config, logger),
         logger,
+        avoid_buildings_gdf=buildings,
     )
 
     nearest = nearest_section(reference_gdf, sections_for_distance, analysis_crs, section_id_field, section_name_field, reference_type)

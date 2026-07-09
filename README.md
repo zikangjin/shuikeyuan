@@ -64,6 +64,24 @@ python app.py --config config.yaml
 python app.py --config config.yaml --no-gui
 ```
 
+## 2.1 运行 Web 页面
+
+如果希望用浏览器查看更清爽的地图和动画，可以启动本地 Web 控制台：
+
+```powershell
+python web_app.py --config config.yaml --host 127.0.0.1 --port 8765
+```
+
+然后在浏览器打开：
+
+```text
+http://127.0.0.1:8765
+```
+
+Web 页面复用同一套分析代码，输入框默认读取 `config.yaml`。浏览器不能直接获取本机文件夹真实路径，所以文件选择采用“编辑路径 / 重读配置”的方式；分析结果、Excel、CSV、校正河道仍输出到 `outputs`。
+
+Web 动画的断面标签会随时间帧更新当前断面 buffer 内最大水深/水位；绿色校正河道标签也会显示当前帧校正河道 buffer 内最大水深/水位。
+
 ## 3. 输入数据格式
 
 建筑物数据支持：
@@ -107,6 +125,8 @@ python app.py --config config.yaml --no-gui
 - `section_crs`：可留空。若断面没有 CRS，程序优先使用已经推断出的栅格 CRS；当前 DAT 断面可随淹没栅格自动使用同一坐标系。
 - `section_reference_mode`：窗口中的“最近断面参考”。默认 `first_flooded_buildings`，表示固定当前村庄，找到首次受淹时刻后，用首批受淹建筑物整体几何遍历所有断面并取最近断面。
 - `max_section_distance_m`：有效最近断面的最大允许距离，默认 3000 米。若最近候选断面超过该距离，程序会在结果中标记“无有效附近断面”，不提取该远处断面值，也不会在动画里用远处断面拉大视野。
+- `section_avoid_buildings`：断面裁剪后是否避让当前村庄建筑物，默认 `true`。开启后，断面仍必须经过河中，但如果继续延伸会穿过建筑物，会在建筑物前缘截断。
+- `section_building_clearance_m`：避让建筑物时保留的距离，默认 2 米。
 - `river_network_path`：可选河流水系路径，可以是 `.shp` 文件，也可以是包含水系文件的文件夹。当前项目预填为 `E:/水科院/全市河流水系存档/全市河流水系存档.shp`。
 - `river_network_crs`：河流水系缺少 CRS 时才需要填写；当前水系 Shapefile 自带北京 1954 地方高斯坐标，可留空。
 - 可选最近断面参考方式：

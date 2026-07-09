@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>村庄淹没与断面分析</title>
+    <link rel="stylesheet" href="/static/app.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="side-panel">
+        <div class="brand-row">
+          <div>
+            <h1>村庄淹没分析</h1>
+            <p id="configHint">读取 config.yaml</p>
+          </div>
+        </div>
+
+        <section class="panel-section compact-grid">
+          <label>
+            村庄
+            <input id="village_name" autocomplete="off" />
+          </label>
+          <label>
+            情景
+            <input id="scenario_name" autocomplete="off" />
+          </label>
+          <label>
+            阈值 m
+            <input id="threshold" type="number" min="0" step="0.01" />
+          </label>
+          <label>
+            前序 h
+            <input id="time_interval_hours" type="number" min="0" step="0.5" />
+          </label>
+          <label>
+            数据类型
+            <select id="value_type">
+              <option>水深</option>
+              <option>水位</option>
+            </select>
+          </label>
+          <label>
+            断面参考
+            <select id="section_reference_mode">
+              <option value="first_flooded_buildings">首次受淹建筑物</option>
+              <option value="first_flooded_max_building">最深受淹建筑物</option>
+              <option value="village_boundary_or_buildings">优先村庄边界</option>
+              <option value="village_boundary">仅村庄边界</option>
+              <option value="buildings_geometry">建筑物整体</option>
+            </select>
+          </label>
+        </section>
+
+        <section class="panel-section path-list">
+          <label>
+            建筑物
+            <input id="building_path" />
+          </label>
+          <label>
+            淹没数据
+            <input id="flood_folder" />
+          </label>
+          <label>
+            断面数据
+            <input id="section_path" />
+          </label>
+          <label>
+            村庄边界
+            <input id="auxiliary_path" />
+          </label>
+          <label>
+            原河流水系
+            <input id="river_network_path" />
+          </label>
+          <label>
+            输出目录
+            <input id="output_dir" />
+          </label>
+        </section>
+
+        <section class="panel-section switch-grid">
+          <label class="switch-line">
+            <input id="show_river_network" type="checkbox" />
+            <span>显示原河流水系</span>
+          </label>
+          <label class="switch-line">
+            <input id="export_corrected_river_network" type="checkbox" />
+            <span>导出校正河道</span>
+          </label>
+        </section>
+
+        <div class="action-row">
+          <button id="reloadConfig" class="ghost">重读配置</button>
+          <button id="runAnalysis" class="primary">开始分析</button>
+        </div>
+
+        <section class="status-card">
+          <div class="status-head">
+            <span id="statusDot" class="dot idle"></span>
+            <strong id="statusText">就绪</strong>
+          </div>
+          <div id="stepList" class="step-list"></div>
+        </section>
+      </aside>
+
+      <main class="map-panel">
+        <header class="map-topbar">
+          <div>
+            <div id="mapTitle" class="map-title">等待分析结果</div>
+            <div id="mapSubTitle" class="map-subtitle">结果会显示在这里</div>
+          </div>
+          <div class="tool-strip">
+            <button id="zoomIn">放大</button>
+            <button id="zoomOut">缩小</button>
+            <button id="fitView">复位</button>
+            <button id="togglePlay">播放</button>
+          </div>
+        </header>
+
+        <div class="map-wrap">
+          <canvas id="mapCanvas"></canvas>
+          <div class="legend" id="legend">
+            <span><i class="swatch flood"></i>达阈值水深</span>
+            <span><i class="swatch shallow"></i>浅水</span>
+            <span><i class="line river"></i>原河道</span>
+            <span><i class="line corrected"></i>校正河道</span>
+            <span><i class="line section"></i>断面</span>
+            <span><i class="swatch building"></i>建筑物</span>
+          </div>
+        </div>
+
+        <footer class="timeline">
+          <label class="check-pill">
+            <input id="showShallow" type="checkbox" checked />
+            显示浅水
+          </label>
+          <label class="check-pill">
+            <input id="showOriginalRiver" type="checkbox" checked />
+            原河道
+          </label>
+          <label class="check-pill">
+            <input id="showCorrectedRiver" type="checkbox" checked />
+            校正河道
+          </label>
+          <label class="check-pill">
+            <input id="showSections" type="checkbox" checked />
+            断面
+          </label>
+          <input id="frameSlider" type="range" min="0" max="0" value="0" />
+          <div id="frameLabel" class="frame-label">无动画帧</div>
+        </footer>
+
+        <section class="result-strip">
+          <div>
+            <span>首次受淹</span>
+            <strong id="firstFlood">-</strong>
+          </div>
+          <div>
+            <span>最近断面</span>
+            <strong id="nearestSection">-</strong>
+          </div>
+          <div>
+            <span>输出</span>
+            <strong id="outputPath">-</strong>
+          </div>
+        </section>
+      </main>
+    </div>
+    <script src="/static/app.js?v=20260709-section-depth"></script>
+  </body>
+</html>

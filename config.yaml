@@ -40,6 +40,8 @@ section_buffer_m: 5
 max_section_distance_m: 3000
 section_trim_mode: "road_river"
 section_trim_buffer_m: 150
+section_avoid_buildings: true
+section_building_clearance_m: 2
 section_table_path: null
 
 # 道路/路网用于把断面裁到“路-河道-路/末端”这一段。

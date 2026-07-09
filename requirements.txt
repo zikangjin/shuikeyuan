@@ -1,0 +1,9 @@
+geopandas
+rasterio
+rasterstats
+pandas
+numpy
+openpyxl
+pyyaml
+shapely
+pyproj

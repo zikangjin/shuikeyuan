@@ -1,0 +1,6 @@
+recommended_global_dx_m: 38.949611926364014
+recommended_global_dy_m: 20.24167264951393
+residual_p90_m: 58.10537827493654
+offset_median_m: 54.20784692779165
+recommendation: 偏移离散较大，不建议直接用统一平移校正无断面河道；应使用分区校正或人工核查。
+note: dx/dy 表示把原始河道移动到实测河中点附近的平移量；试算文件不应直接覆盖原始数据。

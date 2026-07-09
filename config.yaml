@@ -1,0 +1,73 @@
+building_path: "E:/水科院/全市建筑物白膜/建筑物.shp"
+flood_folder: "E:/水科院/2025山洪淹没模拟/原始数据/怀柔区/24h10a"
+# 断面数据可以是一个文件、一个文件夹，也可以在窗口中多选后用分号保存多个路径。
+section_path: "E:/水科院/怀柔平谷部分沟道实测数据"
+# 也可以写成列表，例如：
+# section_paths:
+#   - "E:/水科院/怀柔平谷部分沟道实测数据/牤牛河3-2000-85-牛彦庆"
+#   - "E:/水科院/怀柔平谷部分沟道实测数据/小泉河沟-2000-85-王岩"
+auxiliary_path: "E:/水科院/村庄边界-高程/村庄边界-高程/村庄边界.shp"
+output_dir: "E:/水科院/flood_workflow_app/outputs"
+
+village_name: "九渡河"
+threshold: 0.2
+time_interval_hours: 1
+value_type: "水深"
+scenario_name: "24h10a"
+
+# 当前真实 H_*.out 文件本身没有 CRS；这里可留空，程序会按村庄建筑物/村界与栅格范围自动推断。
+raster_crs: null
+section_crs: null
+target_projected_crs: null
+
+# 当前全市建筑物白膜中“地名”是区县字段，不是村名。先筛怀柔区，再用辅助村界裁剪九渡河。
+building_village_field: null
+building_id_field: "OBJECTID"
+building_prefilter_field: "地名"
+building_prefilter_value: "怀柔区"
+building_encoding: null
+building_crs: null
+
+# 当前村庄边界字段已检查：Name=村名，Region=区县，编码 GBK。
+auxiliary_village_field: "Name"
+auxiliary_encoding: "gbk"
+auxiliary_crs: null
+
+section_id_field: null
+section_name_field: null
+section_encoding: null
+section_buffer_m: 5
+max_section_distance_m: 3000
+section_trim_mode: "road_river"
+section_trim_buffer_m: 150
+section_table_path: null
+
+# 道路/路网用于把断面裁到“路-河道-路/末端”这一段。
+# 如果不提供 road_path，程序会优先从断面汇总表中读取“路/河道/河中”备注和桩距来裁剪。
+road_path: null
+road_crs: null
+road_encoding: null
+
+# 可选河流水系叠加。只用于窗口动画显示，用来核查村庄、河流、淹没范围的相对位置。
+river_network_path: "E:/水科院/全市河流水系存档/全市河流水系存档.shp"
+river_network_crs: null
+river_network_encoding: null
+show_river_network: true
+export_corrected_river_network: true
+
+# 最近断面选择方式：
+# first_flooded_buildings = 用首次受淹时达到阈值的建筑物整体几何遍历所有断面，取最近断面。
+# first_flooded_max_building = 用首次受淹时水深/水位最大的受淹建筑物遍历所有断面。
+# village_boundary_or_buildings = 优先用村庄边界；没有村界时用建筑物整体。
+# village_boundary = 只允许用村庄边界。
+# buildings_geometry = 用参与分析建筑物整体几何。
+section_reference_mode: "first_flooded_buildings"
+
+use_temp_cropped_tif: true
+temp_dir: "E:/水科院/flood_workflow_app/outputs/temp"
+raster_crop_padding_cells: 2
+treat_zero_as_nodata: true
+all_touched: false
+stop_after_first_flood: true
+animate_all_hours: true
+calculate_area_ratio_all_hours: false

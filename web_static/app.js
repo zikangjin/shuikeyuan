@@ -208,16 +208,29 @@ function resizeCanvas() {
   }
 }
 
-function worldToScreen(x, y) {
+function mapTransform() {
   const [minx, miny, maxx, maxy] = state.extent || [0, 0, 1, 1];
-  const sx = ((x - minx) / (maxx - minx)) * canvas.width;
-  const sy = canvas.height - ((y - miny) / (maxy - miny)) * canvas.height;
+  const dx = Math.max(maxx - minx, 1);
+  const dy = Math.max(maxy - miny, 1);
+  const scale = Math.min(canvas.width / dx, canvas.height / dy);
+  const offsetX = (canvas.width - dx * scale) / 2;
+  const offsetY = (canvas.height - dy * scale) / 2;
+  return { minx, miny, maxx, maxy, scale, offsetX, offsetY };
+}
+
+function worldToScreen(x, y) {
+  const view = mapTransform();
+  const sx = view.offsetX + (x - view.minx) * view.scale;
+  const sy = view.offsetY + (view.maxy - y) * view.scale;
   return [sx, sy];
 }
 
 function screenToWorld(sx, sy) {
-  const [minx, miny, maxx, maxy] = state.extent || [0, 0, 1, 1];
-  return [minx + (sx / canvas.width) * (maxx - minx), miny + ((canvas.height - sy) / canvas.height) * (maxy - miny)];
+  const view = mapTransform();
+  return [
+    view.minx + (sx - view.offsetX) / view.scale,
+    view.maxy - (sy - view.offsetY) / view.scale,
+  ];
 }
 
 async function loadFrame(index) {
@@ -486,8 +499,9 @@ function bindEvents() {
     const dx = (e.clientX - state.drag.x) * scale;
     const dy = (e.clientY - state.drag.y) * scale;
     const [minx, miny, maxx, maxy] = state.drag.extent;
-    const worldDx = (-dx / canvas.width) * (maxx - minx);
-    const worldDy = (dy / canvas.height) * (maxy - miny);
+    const viewScale = mapTransform().scale || 1;
+    const worldDx = -dx / viewScale;
+    const worldDy = dy / viewScale;
     state.extent = [minx + worldDx, miny + worldDy, maxx + worldDx, maxy + worldDy];
     render();
   });

@@ -1,4 +1,4 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="zh-CN">
   <head>
     <meta charset="utf-8" />
@@ -16,7 +16,38 @@
           </div>
         </div>
 
-        <section class="panel-section compact-grid">
+        <section class="panel-section query-mode">
+          <div class="section-title">查询方式</div>
+          <div class="mode-tabs">
+            <button id="modeVillage" class="mode-tab active" type="button">按村庄查询</button>
+            <button id="modeRiver" class="mode-tab" type="button">按沟道查询</button>
+          </div>
+        </section>
+
+        <section id="riverQueryPanel" class="panel-section river-query is-hidden">
+          <div class="section-title">沟道查询</div>
+          <label>
+            沟道名称
+            <input id="river_query_name" autocomplete="off" placeholder="例如 牤牛河3" />
+          </label>
+          <label>
+            涉及村庄范围 m
+            <input id="river_query_village_buffer_m" type="number" min="0" step="10" />
+          </label>
+          <button id="queryRiver" class="ghost">显示沟道村庄与断面</button>
+          <div id="riverQuerySummary" class="query-summary">输入沟道名后查询</div>
+          <div class="query-columns">
+            <div>
+              <strong>涉及村庄</strong>
+              <div id="riverVillageList" class="mini-list"></div>
+            </div>
+            <div>
+              <strong>断面</strong>
+              <div id="riverSectionList" class="mini-list"></div>
+            </div>
+          </div>
+        </section>
+        <section id="villageQueryPanel" class="panel-section compact-grid">
           <label>
             村庄
             <input id="village_name" autocomplete="off" />
@@ -90,7 +121,8 @@
           </label>
         </section>
 
-        <div class="action-row">
+
+        <div id="villageActionRow" class="action-row">
           <button id="reloadConfig" class="ghost">重读配置</button>
           <button id="runAnalysis" class="primary">开始分析</button>
         </div>
@@ -125,6 +157,8 @@
             <span><i class="swatch shallow"></i>浅水</span>
             <span><i class="line river"></i>原河道</span>
             <span><i class="line corrected"></i>校正河道</span>
+            <span><i class="line query-river"></i>查询沟道</span>
+            <span><i class="swatch village"></i>涉及村庄</span>
             <span><i class="line section"></i>断面</span>
             <span><i class="swatch building"></i>建筑物</span>
           </div>
@@ -167,6 +201,8 @@
         </section>
       </main>
     </div>
-    <script src="/static/app.js?v=20260709-equal-scale"></script>
+    <script src="/static/app.js?v=20260713-river-animation"></script>
   </body>
 </html>
+
+

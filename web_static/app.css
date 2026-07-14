@@ -1,4 +1,4 @@
-:root {
+﻿:root {
   --bg: #eef2f5;
   --panel: #ffffff;
   --ink: #18202a;
@@ -87,6 +87,43 @@ p {
   padding-top: 12px;
 }
 
+.section-title {
+  margin-bottom: 8px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.is-hidden {
+  display: none !important;
+}
+
+.query-mode {
+  border-top: 0;
+  padding-top: 2px;
+}
+
+.mode-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #f7f9fb;
+}
+
+.mode-tab {
+  height: 34px;
+  border-color: transparent;
+  background: transparent;
+}
+
+.mode-tab.active {
+  border-color: var(--teal-strong);
+  background: var(--teal);
+  color: #ffffff;
+}
+
 .compact-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -147,10 +184,64 @@ select:focus {
   height: 16px;
 }
 
+.river-query {
+  display: grid;
+  gap: 9px;
+}
+
+.river-query button {
+  width: 100%;
+}
+
+.query-summary {
+  min-height: 28px;
+  padding: 7px 9px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #f8fafb;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.query-columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.query-columns strong {
+  display: block;
+  margin-bottom: 5px;
+  font-size: 12px;
+}
+
+.mini-list {
+  display: grid;
+  gap: 4px;
+  max-height: 92px;
+  overflow: auto;
+  padding: 7px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #ffffff;
+  color: #41505e;
+  font-size: 12px;
+}
+
+.mini-list div {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .action-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 10px;
+}
+
+.action-row.single {
+  grid-template-columns: 1fr;
 }
 
 button {
@@ -340,8 +431,17 @@ button.ghost {
   background: var(--green);
 }
 
+.line.query-river {
+  background: #6c5ce7;
+}
+
 .line.section {
   background: var(--red);
+}
+
+.swatch.village {
+  background: rgba(0, 143, 140, 0.18);
+  border-color: var(--teal);
 }
 
 .timeline {
@@ -429,3 +529,5 @@ button.ghost {
     grid-column: 1 / -1;
   }
 }
+
+

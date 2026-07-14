@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import re
 from dataclasses import dataclass
@@ -129,6 +129,7 @@ def read_vector(
     crs_if_missing: str | None = None,
     encoding: str | None = None,
     where: str | None = None,
+    bbox: tuple[float, float, float, float] | None = None,
     preferred_words: tuple[str, ...] | None = None,
 ) -> gpd.GeoDataFrame:
     path = resolve_vector_path(path, preferred_words=preferred_words)
@@ -141,11 +142,18 @@ def read_vector(
             kwargs["encoding"] = encoding
         if where:
             kwargs["where"] = where
+        if bbox:
+            kwargs["bbox"] = bbox
         try:
             gdf = gpd.read_file(path, **kwargs)
         except TypeError:
-            kwargs.pop("where", None)
-            gdf = gpd.read_file(path, **kwargs)
+            fallback_kwargs = dict(kwargs)
+            fallback_kwargs.pop("where", None)
+            try:
+                gdf = gpd.read_file(path, **fallback_kwargs)
+            except TypeError:
+                fallback_kwargs.pop("bbox", None)
+                gdf = gpd.read_file(path, **fallback_kwargs)
             if where:
                 field, value = parse_simple_where(where)
                 if field in gdf.columns:
@@ -729,3 +737,5 @@ def load_sections(config: dict, logger) -> tuple[gpd.GeoDataFrame, str | None, s
 
     logger.info(f"断面数据路径数量：{len(section_paths)}；合并后断面数量：{len(sections)}")
     return sections, "section_id", "section_name"
+
+

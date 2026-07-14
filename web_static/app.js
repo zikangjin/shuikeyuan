@@ -1,4 +1,4 @@
-const fields = [
+﻿const fields = [
   "building_path",
   "flood_folder",
   "section_path",
@@ -13,12 +13,15 @@ const fields = [
   "section_reference_mode",
   "show_river_network",
   "export_corrected_river_network",
+  "river_query_village_buffer_m",
 ];
 
 const state = {
   config: {},
+  queryMode: "village",
   jobId: null,
   result: null,
+  riverQuery: null,
   frameCells: new Map(),
   frameIndex: 0,
   playing: false,
@@ -58,6 +61,7 @@ async function loadConfig() {
   for (const key of fields) setInputValue(key, state.config[key]);
   el("configHint").textContent = "已载入 config.yaml";
   setStatus("就绪", "idle");
+  setQueryMode(state.queryMode || "village");
 }
 
 function collectConfig() {
@@ -66,9 +70,22 @@ function collectConfig() {
   return config;
 }
 
+function setQueryMode(mode) {
+  state.queryMode = mode === "river" ? "river" : "village";
+  const isRiver = state.queryMode === "river";
+  el("modeVillage")?.classList.toggle("active", !isRiver);
+  el("modeRiver")?.classList.toggle("active", isRiver);
+  el("villageQueryPanel")?.classList.toggle("is-hidden", isRiver);
+  el("riverQueryPanel")?.classList.toggle("is-hidden", !isRiver);
+  el("runAnalysis")?.classList.toggle("is-hidden", isRiver);
+  el("villageActionRow")?.classList.toggle("single", isRiver);
+  setStatus(isRiver ? "沟道查询就绪" : "村庄查询就绪", "idle");
+}
+
 async function runAnalysis() {
   setStatus("正在启动分析", "running");
   state.result = null;
+  state.riverQuery = null;
   state.frameCells.clear();
   state.frameIndex = 0;
   render();
@@ -80,6 +97,43 @@ async function runAnalysis() {
   const data = await res.json();
   state.jobId = data.job_id;
   pollJob();
+}
+
+async function runRiverQuery() {
+  const riverName = getInputValue("river_query_name").trim();
+  if (!riverName) {
+    setStatus("请输入沟道名称", "error");
+    return;
+  }
+  setStatus("正在查询沟道", "running");
+  updateSteps([]);
+  const payload = collectConfig();
+  payload.river_name = riverName;
+  const res = await fetch("/api/river-query", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const data = await res.json();
+  if (!res.ok || data.error) {
+    state.riverQuery = null;
+    setStatus(data.error || "沟道查询失败", "error");
+    updateRiverQueryUi(data);
+    render();
+    return;
+  }
+  state.result = null;
+  state.jobId = null;
+  state.riverQuery = data;
+  state.frameCells.clear();
+  state.frameIndex = 0;
+  state.playing = false;
+  setupQueryMap();
+  updateRiverQueryUi(data);
+  setStatus("沟道查询完成", "done");
+  updateSteps(data.logs || []);
+  await loadFrame(0);
+  render();
 }
 
 async function pollJob() {
@@ -140,9 +194,55 @@ function updateResultUi() {
   }
 }
 
+function updateRiverQueryUi(data) {
+  const summary = el("riverQuerySummary");
+  const villageList = el("riverVillageList");
+  const sectionList = el("riverSectionList");
+  villageList.innerHTML = "";
+  sectionList.innerHTML = "";
+  if (!data || data.error) {
+    summary.textContent = data?.error || "输入沟道名后查询";
+    for (const name of data?.available_rivers || []) {
+      const div = document.createElement("div");
+      div.textContent = name;
+      sectionList.appendChild(div);
+    }
+    el("frameSlider").max = 0;
+    el("frameSlider").value = 0;
+    updateFrameLabel();
+    return;
+  }
+  summary.textContent = `${data.matched_river || data.query}：${data.village_count || 0} 个村庄，${data.section_count || 0} 个断面`;
+  for (const village of data.villages || []) {
+    const div = document.createElement("div");
+    div.textContent = village.village_name || "-";
+    villageList.appendChild(div);
+  }
+  for (const section of data.sections || []) {
+    const div = document.createElement("div");
+    const length = Number.isFinite(section.length_m) ? `，${section.length_m.toFixed(0)}m` : "";
+    div.textContent = `${shortSectionId(section.section_id || section.section_name || "")}${length}`;
+    sectionList.appendChild(div);
+  }
+  el("mapTitle").textContent = `${data.matched_river || data.query} | 沟道查询`;
+  el("mapSubTitle").textContent = `涉及村庄 ${data.village_count || 0} 个，断面 ${data.section_count || 0} 个，村庄范围 ${data.village_buffer_m || 0}m`;
+  el("firstFlood").textContent = "-";
+  el("nearestSection").textContent = "-";
+  el("outputPath").textContent = "沟道查询不导出结果";
+  const frames = data.map?.frames || [];
+  el("frameSlider").max = Math.max(frames.length - 1, 0);
+  el("frameSlider").value = 0;
+  updateFrameLabel();
+}
 function setupMap() {
   const b = collectBounds();
   state.homeExtent = padBounds(b, 0.07);
+  state.extent = state.homeExtent;
+}
+
+function setupQueryMap() {
+  const b = collectQueryBounds();
+  state.homeExtent = padBounds(b, 0.08);
   state.extent = state.homeExtent;
 }
 
@@ -152,6 +252,7 @@ function collectBounds() {
   for (const key of ["buildings", "reference_buildings", "sections", "rivers", "corrected_rivers"]) {
     collectGeoJsonBounds(map[key], bounds);
   }
+  collectQueryGeoJsonBounds(bounds);
   if (!bounds.length) return [0, 0, 100, 100];
   return [
     Math.min(...bounds.map((b) => b[0])),
@@ -159,6 +260,25 @@ function collectBounds() {
     Math.max(...bounds.map((b) => b[2])),
     Math.max(...bounds.map((b) => b[3])),
   ];
+}
+
+function collectQueryBounds() {
+  const bounds = [];
+  collectQueryGeoJsonBounds(bounds);
+  if (!bounds.length) return collectBounds();
+  return [
+    Math.min(...bounds.map((b) => b[0])),
+    Math.min(...bounds.map((b) => b[1])),
+    Math.max(...bounds.map((b) => b[2])),
+    Math.max(...bounds.map((b) => b[3])),
+  ];
+}
+
+function collectQueryGeoJsonBounds(bounds) {
+  const map = state.riverQuery?.map || {};
+  for (const key of ["villages", "buildings", "river", "sections"]) {
+    collectGeoJsonBounds(map[key], bounds);
+  }
 }
 
 function collectGeoJsonBounds(geojson, bounds) {
@@ -234,14 +354,32 @@ function screenToWorld(sx, sy) {
 }
 
 async function loadFrame(index) {
-  if (!state.jobId || state.frameCells.has(index)) return;
-  const res = await fetch(`/api/job/${state.jobId}/frame/${index}`);
+  if (state.frameCells.has(index)) return;
+  let url = "";
+  if (state.result && state.jobId) {
+    url = `/api/job/${state.jobId}/frame/${index}`;
+  } else if (state.riverQuery?.query_id) {
+    url = `/api/river-query/${state.riverQuery.query_id}/frame/${index}`;
+  }
+  if (!url) return;
+  const res = await fetch(url);
   if (!res.ok) return;
-  state.frameCells.set(index, await res.json());
+  const payload = await res.json();
+  state.frameCells.set(index, payload);
+  const frames = currentFrames();
+  if (frames[index] && Number.isFinite(payload.max_value)) {
+    frames[index].max_value = payload.max_value;
+  }
+}
+function currentFrames() {
+  return state.result?.map?.frames || state.riverQuery?.map?.frames || [];
 }
 
+function currentThreshold() {
+  return Number(state.result?.map?.threshold ?? state.riverQuery?.map?.threshold ?? 0);
+}
 async function setFrame(index) {
-  const frames = state.result?.map?.frames || [];
+  const frames = currentFrames();
   if (!frames.length) return;
   state.frameIndex = Math.max(0, Math.min(index, frames.length - 1));
   el("frameSlider").value = state.frameIndex;
@@ -251,7 +389,7 @@ async function setFrame(index) {
 }
 
 function updateFrameLabel() {
-  const frames = state.result?.map?.frames || [];
+  const frames = currentFrames();
   if (!frames.length) {
     el("frameLabel").textContent = "无动画帧";
     return;
@@ -263,7 +401,7 @@ function updateFrameLabel() {
 
 async function playLoop() {
   if (!state.playing) return;
-  const frames = state.result?.map?.frames || [];
+  const frames = currentFrames();
   if (!frames.length) return;
   await setFrame((state.frameIndex + 1) % frames.length);
   setTimeout(playLoop, 700);
@@ -274,7 +412,16 @@ function render() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   ctx.fillStyle = "#f6f8fa";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
-  if (!state.result || !state.extent) {
+  if (!state.extent) {
+    drawEmptyState();
+    return;
+  }
+  if (!state.result) {
+    if (state.riverQuery) {
+      drawFlood();
+      drawRiverQuery();
+      return;
+    }
     drawEmptyState();
     return;
   }
@@ -284,8 +431,8 @@ function render() {
   drawGeoJson(state.result.map.buildings, { stroke: "#25313d", width: 1, fill: "rgba(255, 248, 207, 0.38)" });
   drawGeoJson(state.result.map.reference_buildings, { stroke: "#8e44ad", width: 3 });
   if (state.showSections) drawSections();
+  if (state.riverQuery) drawRiverQuery();
 }
-
 function drawEmptyState() {
   ctx.fillStyle = "#667483";
   ctx.font = `${15 * (window.devicePixelRatio || 1)}px Microsoft YaHei UI`;
@@ -296,7 +443,7 @@ function drawEmptyState() {
 function drawFlood() {
   const frame = state.frameCells.get(state.frameIndex);
   if (!frame) return;
-  const threshold = Number(state.result?.map?.threshold || 0);
+  const threshold = currentThreshold();
   for (const cell of frame.cells || []) {
     const [x0, y0, x1, y1, value] = cell;
     if (value < threshold && !state.showShallow) continue;
@@ -325,6 +472,47 @@ function drawCorrectedRivers() {
     const value = values[riverId]?.max;
     const label = Number.isFinite(value) ? `校正河道 | 水深${value.toFixed(2)}m` : "校正河道";
     drawFeatureLabel(feature, { label, color: "#006d4f" });
+  }
+}
+
+function drawRiverQuery() {
+  const map = state.riverQuery?.map || {};
+  drawGeoJson(map.villages, { stroke: "#008f8c", width: 2, fill: "rgba(0, 143, 140, 0.14)" });
+  drawGeoJson(map.buildings, { stroke: "#25313d", width: 1, fill: "rgba(255, 248, 207, 0.42)" });
+  drawGeoJson(map.river, { stroke: "#6c5ce7", width: 4, label: "查询沟道", labelColor: "#4d3fc0" });
+  if (state.showSections) drawQuerySections(map.sections);
+  drawVillageLabels(map.villages);
+}
+function drawQuerySections(geojson) {
+  for (const feature of geojson?.features || []) {
+    drawGeometry(feature.geometry, { stroke: "#d99020", width: 2 });
+    drawQuerySectionLabel(feature);
+  }
+}
+
+function drawQuerySectionLabel(feature) {
+  const p = geometryMidpoint(feature.geometry);
+  if (!p) return;
+  const screen = worldToScreen(p[0], p[1]);
+  const props = feature.properties || {};
+  const fullId = String(props.section_id || props.section_name || "");
+  const id = shortSectionId(fullId);
+  const length = Number(props.trimmed_length_m || props.original_length_m);
+  const depth = Number(props.section_original_depth_m);
+  const frame = state.frameCells.get(state.frameIndex) || {};
+  const sectionValues = frame.section_values || {};
+  const waterDepth = sectionValues[fullId]?.max ?? sectionValues[id]?.max;
+  const parts = [id];
+  if (Number.isFinite(length)) parts.push(`长${length.toFixed(0)}m`);
+  if (Number.isFinite(depth)) parts.push(`原深${depth.toFixed(2)}m`);
+  if (Number.isFinite(waterDepth)) parts.push(`水深${waterDepth.toFixed(2)}m`);
+  drawHaloText(parts.join(" | "), screen[0] + 5, screen[1] - 5, "#7a4c00", "left");
+}
+function drawVillageLabels(geojson) {
+  for (const feature of geojson?.features || []) {
+    const name = feature.properties?.village_name;
+    if (!name) continue;
+    drawFeatureLabel(feature, { label: name, color: "#006f6c" });
   }
 }
 
@@ -413,7 +601,7 @@ function drawFeatureLabel(feature, style) {
   const p = geometryMidpoint(feature.geometry);
   if (!p) return;
   const screen = worldToScreen(p[0], p[1]);
-  drawHaloText(style.label, screen[0], screen[1], style.color || "#006d4f", "center");
+  drawHaloText(style.label, screen[0], screen[1], style.labelColor || style.color || "#006d4f", "center");
 }
 
 function geometryMidpoint(geom) {
@@ -453,8 +641,11 @@ function zoom(factor, sx = canvas.width / 2, sy = canvas.height / 2) {
 }
 
 function bindEvents() {
+  el("modeVillage").addEventListener("click", () => setQueryMode("village"));
+  el("modeRiver").addEventListener("click", () => setQueryMode("river"));
   el("reloadConfig").addEventListener("click", loadConfig);
   el("runAnalysis").addEventListener("click", runAnalysis);
+  el("queryRiver").addEventListener("click", runRiverQuery);
   el("zoomIn").addEventListener("click", () => zoom(0.75));
   el("zoomOut").addEventListener("click", () => zoom(1.35));
   el("fitView").addEventListener("click", () => {
@@ -514,3 +705,10 @@ function bindEvents() {
 
 bindEvents();
 loadConfig().then(render);
+
+
+
+
+
+
+

@@ -56,6 +56,7 @@ river_network_crs: null
 river_network_encoding: null
 show_river_network: true
 export_corrected_river_network: true
+river_query_village_buffer_m: 150
 
 # 最近断面选择方式：
 # first_flooded_buildings = 用首次受淹时达到阈值的建筑物整体几何遍历所有断面，取最近断面。

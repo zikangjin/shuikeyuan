@@ -13,7 +13,7 @@ def main() -> None:
     parser.add_argument("--config", default="config.yaml", help="配置文件路径")
     parser.add_argument("--no-gui", action="store_true", help="不打开窗口，直接按配置运行分析")
     parser.add_argument("--check-gui", action="store_true", help="创建并销毁窗口，用于检查 tkinter 是否可用")
-    args = parser.parse_args()
+    args = parser.parse_args()                                                                           
 
     config_path = Path(args.config)
     if args.no_gui:
